@@ -10,7 +10,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 
 3. Run `train_QANet.py` to start training.
 
-4. Fast demo: Use the god maded `model.fit()` in `QANet_fit_demo.py` with random numpy data.
+4. Fast demo: Use the god made `model.fit()` in `QANet_fit_demo.py` with random numpy data.
 
 ## Results
 Todo...
