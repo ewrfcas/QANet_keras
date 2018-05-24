@@ -2,15 +2,8 @@ import numpy as np
 import QANet_keras as QANet
 import os
 from keras.optimizers import *
-from keras.callbacks import *
-import keras.backend as K
 import util
-from keras.layers import *
-from keras.regularizers import *
 from keras.models import *
-from context2query_attention import context2query_attention
-from multihead_attention import Attention
-from position_embedding import Position_Embedding
 import json
 from tqdm import tqdm
 from keras.utils import multi_gpu_model

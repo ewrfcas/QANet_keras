@@ -6,7 +6,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 ## Pipline
 1. Download squad data from (https://rajpurkar.github.io/SQuAD-explorer/).
 
-2. Run `preprocess.ipynb` to get npys from the origin json squad data.
+2. Run `preprocess.ipynb` and `handcraft.ipynb` to get npys of the preprocessed data and handcraft features.
 
 3. Run `train_QANet.py` to start training.
 
