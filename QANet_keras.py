@@ -4,21 +4,23 @@ from keras.models import *
 from context2query_attention import context2query_attention
 from multihead_attention import Attention as SelfAttention
 from position_embedding import Position_Embedding as PosEmbedding
-import numpy as np
-import tensorflow as tf
 from keras import layers
+from keras.initializers import *
+import tensorflow as tf
+import keras.backend as K
 
 regularizer = l2(3e-7)
+VarianceScaling(scale=1.0, mode='fan_in', distribution='normal', seed=2018)
 
-def highway(highway_layers, x, num_layers = 2, dropout = 0.0):
-        # reduce dim
-        x = highway_layers[0](x)
-        for i in range(num_layers):
-            T = highway_layers[i*2+1](x)
-            H = highway_layers[i*2+2](x)
-            H = Dropout(dropout)(H)
-            x = Lambda(lambda v: v[0] * v[1] + v[2] * (1 - v[1]))([H, T, x])
-        return x
+def highway(highway_layers, x, num_layers=2, dropout=0.0):
+    # reduce dim
+    x = highway_layers[0](x)
+    for i in range(num_layers):
+        T = highway_layers[i * 2 + 1](x)
+        H = highway_layers[i * 2 + 2](x)
+        H = Dropout(dropout)(H)
+        x = Lambda(lambda v: v[0] * v[1] + v[2] * (1 - v[1]))([H, T, x])
+    return x
 
 def conv_block(conv_layers, x, num_conv=4, dropout= 0.0):
     x = Lambda(lambda v: K.expand_dims(v, axis=2))(x)
@@ -58,7 +60,7 @@ def mask_logits(inputs, mask, mask_value = -1e12, axis=1, time_dim=1):
         mask = tf.expand_dims(mask, axis)
     return inputs + mask_value * (1 - mask)
 
-def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=16, word_mat=None, char_input_size=1000, filters=128, num_head=8, dropout=0.1):
+def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=16, word_mat=None, char_input_size=1000, filters=128, num_head=8, hand_feat_dim=0, dropout=0.1):
 
     # Input Embedding Layer
     contw_input = Input((cont_limit,))
@@ -67,38 +69,31 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
     quesc_input = Input((ques_limit, char_limit))
     cont_len = Input((None,))
     ques_len = Input((None,))
+    if hand_feat_dim!=0:
+        handcraft_input = Input((cont_limit, hand_feat_dim))
 
     # embedding word
     xw_cont = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=cont_limit, mask_zero=False, trainable=False)(contw_input)
     xw_ques = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=ques_limit, mask_zero=False, trainable=False)(quesw_input)
 
     # embedding char
-    contc_inputs = Lambda(lambda x: tf.unstack(x, axis=1))(contc_input)
-    quesc_inputs = Lambda(lambda x: tf.unstack(x, axis=1))(quesc_input)
     CharEmbedding = Embedding(char_input_size, char_dim, input_length=char_limit, mask_zero=False, name='char_embedding')
-    xc_cont_input=[]
-    for x in contc_inputs:
-        xc_cont_input.append(CharEmbedding(x))
-    xc_ques_input=[]
-    for x in quesc_inputs:
-        xc_ques_input.append(CharEmbedding(x))
-    char_conv=Conv1D(filters, 5, activation='relu', kernel_regularizer=regularizer, name='char_conv')
-    xc_cont=[]
-    for x in xc_cont_input:
-        xc_cont.append(GlobalMaxPooling1D()(char_conv(x)))
-    xc_ques=[]
-    for x in xc_ques_input:
-        xc_ques.append(GlobalMaxPooling1D()(char_conv(x)))
-    for i,x in enumerate(xc_cont):
-        xc_cont[i] = Lambda(lambda x:K.expand_dims(x, axis=1))(x)
-    for i,x in enumerate(xc_ques):
-        xc_ques[i] = Lambda(lambda x:K.expand_dims(x, axis=1))(x)
-    xc_cont = Concatenate(axis=1)(xc_cont)
-    xc_ques = Concatenate(axis=1)(xc_ques)
+    xc_cont=CharEmbedding(contc_input)
+    xc_ques=CharEmbedding(quesc_input)
+    char_conv = Conv1D(filters, 5, activation='relu', kernel_regularizer=regularizer, name='char_conv')
+    xc_cont = Lambda(lambda x: tf.reshape(x, (-1, char_limit, char_dim)))(xc_cont)
+    xc_ques = Lambda(lambda x: tf.reshape(x, (-1, char_limit, char_dim)))(xc_ques)
+    xc_cont = char_conv(xc_cont)
+    xc_ques = char_conv(xc_ques)
+    xc_cont = GlobalMaxPooling1D()(xc_cont)
+    xc_ques = GlobalMaxPooling1D()(xc_ques)
+    xc_cont = Lambda(lambda x: tf.reshape(x, (-1, cont_limit, filters)))(xc_cont)
+    xc_ques = Lambda(lambda x: tf.reshape(x, (-1, ques_limit, filters)))(xc_ques)
 
     # highwayNet
     x_cont = Concatenate()([xw_cont, xc_cont])
     x_ques = Concatenate()([xw_ques, xc_ques])
+
     # highway shared layers
     highway_layers = [Conv1D(filters, 1, kernel_regularizer=regularizer)]
     for i in range(2):
@@ -114,7 +109,7 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
         DepthwiseConv_share_1.append([DepthwiseConv2D((7, 1), activation='relu', kernel_regularizer=regularizer,padding='same', depth_multiplier=1),
                                       Conv2D(filters, 1, padding='same', kernel_regularizer=regularizer)])
     # shared attention
-    head_size = int(x_cont.shape[-1] // num_head)
+    head_size = filters//num_head
     SelfAttention_share_1 = SelfAttention(num_head, head_size)
     # shared feed-forward
     FeedForward_share_1 = []
@@ -135,7 +130,10 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
 
     # Context_to_Query_Attention_Layer
     x = context2query_attention(512, cont_limit, ques_limit, dropout)([x_cont, x_ques, cont_len, ques_len])
-    x = Conv1D(filters, 1, kernel_regularizer=regularizer)(x)
+    # handcraft
+    if hand_feat_dim != 0:
+        x = Concatenate()([x, handcraft_input])
+    x = Conv1D(filters, 1, kernel_regularizer=regularizer, activation='linear')(x)
 
     # Model_Encoder_Layer
     # shared layers
@@ -177,5 +175,9 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
     x_end = Lambda(lambda x: mask_logits(x[0], x[1], axis=0, time_dim=1))([x_end, cont_len])
     x_end = Lambda(lambda x: K.softmax(x),name='end')(x_end)
 
-    return Model(inputs=[contw_input, quesw_input, contc_input, quesc_input, cont_len, ques_len], outputs=[x_start,x_end])
-    
+    if hand_feat_dim==0:
+        return Model(inputs=[contw_input, quesw_input, contc_input, quesc_input, cont_len, ques_len],
+                     outputs=[x_start,x_end])
+    else:
+        return Model(inputs=[contw_input, quesw_input, contc_input, quesc_input, cont_len, ques_len, handcraft_input],
+                     outputs=[x_start, x_end])

@@ -12,5 +12,12 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 
 4. Fast demo: Use the god made `model.fit()` in `QANet_fit_demo.py` with random numpy data.
 
+## Updates
+- [x] Add EMA
+- [x] Add multi gpu (speed up)
+- [x] Support adding handcraft features
+- [ ] Add layer dropout
+- [ ] Add data augmentation
+
 ## Results
 Todo...
