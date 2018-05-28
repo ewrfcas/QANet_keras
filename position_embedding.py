@@ -1,31 +1,33 @@
-from keras import backend as K
 from keras.engine.topology import Layer
+import tensorflow as tf
+import math
 
 
 class Position_Embedding(Layer):
-
-    def __init__(self, size=None, mode='sum', **kwargs):
-        self.size = size  # 必须为偶数
-        self.mode = mode
+    def __init__(self, min_timescale=1.0, max_timescale=1.0e4, **kwargs):
+        self.min_timescale = min_timescale
+        self.max_timescale = max_timescale
         super(Position_Embedding, self).__init__(**kwargs)
 
+    def get_timing_signal_1d(self, length, channels):
+        position = tf.to_float(tf.range(length))
+        num_timescales = channels // 2
+        log_timescale_increment = (math.log(float(self.max_timescale) / float(self.min_timescale)) / (tf.to_float(num_timescales) - 1))
+        inv_timescales = self.min_timescale * tf.exp(tf.to_float(tf.range(num_timescales)) * -log_timescale_increment)
+        scaled_time = tf.expand_dims(position, 1) * tf.expand_dims(inv_timescales, 0)
+        signal = tf.concat([tf.sin(scaled_time), tf.cos(scaled_time)], axis=1)
+        signal = tf.pad(signal, [[0, 0], [0, tf.mod(channels, 2)]])
+        signal = tf.reshape(signal, [1, length, channels])
+        return signal
+
+    def add_timing_signal_1d(self, x):
+        length = tf.shape(x)[1]
+        channels = tf.shape(x)[2]
+        signal = self.get_timing_signal_1d(length, channels)
+        return x + signal
+
     def call(self, x, mask=None):
-        if (self.size == None) or (self.mode == 'sum'):
-            self.size = int(x.shape[-1])
-        batch_size, seq_len = K.shape(x)[0], K.shape(x)[1]
-        position_j = 1. / K.pow(10000., 2 * K.arange(self.size / 2, dtype='float32') / self.size)
-        position_j = K.expand_dims(position_j, 0)
-        position_i = K.cumsum(K.ones_like(x[:, :, 0]), 1) - 1  # K.arange不支持变长，只好用这种方法生成
-        position_i = K.expand_dims(position_i, 2)
-        position_ij = K.dot(position_i, position_j)
-        position_ij = K.concatenate([K.cos(position_ij), K.sin(position_ij)], 2)
-        if self.mode == 'sum':
-            return position_ij + x
-        elif self.mode == 'concat':
-            return K.concatenate([position_ij, x], 2)
+        return self.add_timing_signal_1d(x)
 
     def compute_output_shape(self, input_shape):
-        if self.mode == 'sum':
-            return input_shape
-        elif self.mode == 'concat':
-            return (input_shape[0], input_shape[1], input_shape[2] + self.size)
+        return input_shape

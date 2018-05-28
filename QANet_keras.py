@@ -2,15 +2,30 @@ from keras.layers import *
 from keras.regularizers import *
 from keras.models import *
 from context2query_attention import context2query_attention
-from multihead_attention import Attention as SelfAttention
-from position_embedding import Position_Embedding as PosEmbedding
+from multihead_attention import Attention as MultiHeadAttention
+from position_embedding import Position_Embedding as PositionEmbedding
 from keras import layers
-from keras.initializers import *
+from keras. initializers import *
 import tensorflow as tf
 import keras.backend as K
 
 regularizer = l2(3e-7)
 VarianceScaling(scale=1.0, mode='fan_in', distribution='normal', seed=2018)
+
+def mask_logits(inputs, mask, mask_value=-1e12, axis=1, time_dim=1):
+    mask = K.cast(mask, tf.int32)
+    mask = K.one_hot(mask[:, 0], K.shape(inputs)[time_dim])
+    mask = 1 - K.cumsum(mask, 1)
+    mask = tf.cast(mask, tf.float32)
+    if axis != 0:
+        mask = tf.expand_dims(mask, axis)
+    return inputs + mask_value * (1 - mask)
+
+def layer_dropout(x, residual, dropout):
+    pred = tf.random_uniform([]) < dropout
+    x = Dropout(dropout)(x)
+    x = layers.add([x, residual])
+    return Lambda(lambda x: tf.cond(pred, lambda: x[1], lambda: x[0]))([x, residual])
 
 def highway(highway_layers, x, num_layers=2, dropout=0.0):
     # reduce dim
@@ -22,7 +37,7 @@ def highway(highway_layers, x, num_layers=2, dropout=0.0):
         x = Lambda(lambda v: v[0] * v[1] + v[2] * (1 - v[1]))([H, T, x])
     return x
 
-def conv_block(conv_layers, x, num_conv=4, dropout= 0.0):
+def conv_block(conv_layers, x, num_conv=4, dropout=0.0, l=1., L=1.):
     x = Lambda(lambda v: K.expand_dims(v, axis=2))(x)
     for i in range(num_conv):
         residual = x
@@ -30,38 +45,31 @@ def conv_block(conv_layers, x, num_conv=4, dropout= 0.0):
         x = Dropout(dropout)(x)
         x = conv_layers[i][0](x)
         x = conv_layers[i][1](x)
-        x = layers.add([x, residual])
+        x = layer_dropout(x, residual, dropout * (l / L))
     x = Lambda(lambda v: tf.squeeze(v, axis=2))(x)
     return x
 
-def attention_block(attention_layer, x, len, dropout=0.0):
+def attention_block(attention_layer, x, seq_len, dropout=0.0, l=1., L=1.):
     residual = x
     x = BatchNormalization()(x)
     x = Dropout(dropout)(x)
-    x = attention_layer([x,x,x,len,len])
-    x = layers.add([x, residual])
+    x1 = attention_layer[0](x)
+    x2 = attention_layer[1](x)
+    x = attention_layer[2]([x1,x2,seq_len])
+    x = layer_dropout(x, residual, dropout * (l / L))
     return x
 
-def feed_forward_block(FeedForward_layers, x, dropout=0.0):
+def feed_forward_block(FeedForward_layers, x, dropout=0.0, l=1., L=1.):
     residual = x
     x = BatchNormalization()(x)
     x = Dropout(dropout)(x)
     x = FeedForward_layers[0](x)
     x = FeedForward_layers[1](x)
-    x = layers.add([x, residual])
+    x = layer_dropout(x, residual, dropout * (l / L))
     return x
 
-def mask_logits(inputs, mask, mask_value = -1e12, axis=1, time_dim=1):
-    mask = K.cast(mask, tf.int32)
-    mask = K.one_hot(mask[:, 0], K.shape(inputs)[time_dim])
-    mask = 1 - K.cumsum(mask, 1)
-    mask = tf.cast(mask, tf.float32)
-    if axis!=0:
-        mask = tf.expand_dims(mask, axis)
-    return inputs + mask_value * (1 - mask)
-
-def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=16, word_mat=None, char_input_size=1000, filters=128, num_head=8, hand_feat_dim=0, dropout=0.1):
-
+def QANet(word_dim=300, char_dim=64, cont_limit=400, ques_limit=50, char_limit=16, word_mat=None, char_input_size=1000,
+          filters=128, num_head=8, hand_feat_dim=0, dropout=0.1):
     # Input Embedding Layer
     contw_input = Input((cont_limit,))
     quesw_input = Input((ques_limit,))
@@ -69,17 +77,20 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
     quesc_input = Input((ques_limit, char_limit))
     cont_len = Input((None,))
     ques_len = Input((None,))
-    if hand_feat_dim!=0:
+    if hand_feat_dim != 0:
         handcraft_input = Input((cont_limit, hand_feat_dim))
 
     # embedding word
-    xw_cont = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=cont_limit, mask_zero=False, trainable=False)(contw_input)
-    xw_ques = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=ques_limit, mask_zero=False, trainable=False)(quesw_input)
+    xw_cont = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=cont_limit, mask_zero=False,
+                        trainable=False)(contw_input)
+    xw_ques = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], input_length=ques_limit, mask_zero=False,
+                        trainable=False)(quesw_input)
 
     # embedding char
-    CharEmbedding = Embedding(char_input_size, char_dim, input_length=char_limit, mask_zero=False, name='char_embedding')
-    xc_cont=CharEmbedding(contc_input)
-    xc_ques=CharEmbedding(quesc_input)
+    CharEmbedding = Embedding(char_input_size, char_dim, input_length=char_limit, mask_zero=False,
+                              name='char_embedding')
+    xc_cont = CharEmbedding(contc_input)
+    xc_ques = CharEmbedding(quesc_input)
     char_conv = Conv1D(filters, 5, activation='relu', kernel_regularizer=regularizer, name='char_conv')
     xc_cont = Lambda(lambda x: tf.reshape(x, (-1, char_limit, char_dim)))(xc_cont)
     xc_ques = Lambda(lambda x: tf.reshape(x, (-1, char_limit, char_dim)))(xc_ques)
@@ -106,24 +117,27 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
     # shared convs
     DepthwiseConv_share_1 = []
     for i in range(4):
-        DepthwiseConv_share_1.append([DepthwiseConv2D((7, 1), activation='relu', kernel_regularizer=regularizer,padding='same', depth_multiplier=1),
+        DepthwiseConv_share_1.append([DepthwiseConv2D((7, 1), activation='relu', kernel_regularizer=regularizer,
+                                                      padding='same', depth_multiplier=1),
                                       Conv2D(filters, 1, padding='same', kernel_regularizer=regularizer)])
     # shared attention
-    head_size = filters//num_head
-    SelfAttention_share_1 = SelfAttention(num_head, head_size)
+    head_size = filters // num_head
+    SelfAttention_share_1 = [Conv1D(2 * filters, 1, kernel_regularizer=regularizer),
+                             Conv1D(filters, 1, kernel_regularizer=regularizer),
+                             MultiHeadAttention(filters, num_head, dropout=0.1, bias=False)]
     # shared feed-forward
     FeedForward_share_1 = []
     FeedForward_share_1.append(Conv1D(filters, 1, kernel_regularizer=regularizer, activation='relu'))
     FeedForward_share_1.append(Conv1D(filters, 1, kernel_regularizer=regularizer, activation='linear'))
 
     # context part
-    x_cont = PosEmbedding()(x_cont)
+    x_cont = PositionEmbedding()(x_cont)
     x_cont = conv_block(DepthwiseConv_share_1, x_cont, 4, dropout)
     x_cont = attention_block(SelfAttention_share_1, x_cont, cont_len, dropout)
     x_cont = feed_forward_block(FeedForward_share_1, x_cont, dropout)
 
     # question part
-    x_ques = PosEmbedding()(x_ques)
+    x_ques = PositionEmbedding()(x_ques)
     x_ques = conv_block(DepthwiseConv_share_1, x_ques, 4, dropout)
     x_ques = attention_block(SelfAttention_share_1, x_ques, ques_len, dropout)
     x_ques = feed_forward_block(FeedForward_share_1, x_ques, dropout)
@@ -148,7 +162,9 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
                                                                depth_multiplier=1),
                                                Conv2D(filters, 1, padding='same', kernel_regularizer=regularizer)])
         DepthwiseConv_share_2.append(DepthwiseConv_share_2_temp)
-        SelfAttention_share_2.append(SelfAttention(num_head, head_size))
+        SelfAttention_share_2.append([Conv1D(2 * filters, 1, kernel_regularizer=regularizer),
+                                     Conv1D(filters, 1, kernel_regularizer=regularizer),
+                                     MultiHeadAttention(filters, num_head, dropout=0.1, bias=True)])
         FeedForward_share_2.append([Conv1D(filters, 1, kernel_regularizer=regularizer, activation='relu'),
                                     Conv1D(filters, 1, kernel_regularizer=regularizer, activation='linear')])
 
@@ -156,28 +172,28 @@ def QANet(word_dim=300, char_dim=200, cont_limit=400, ques_limit=50, char_limit=
     for i in range(3):
         x = outputs[-1]
         for j in range(7):
-            x = PosEmbedding()(x)
-            x = conv_block(DepthwiseConv_share_2[j], x, 2, dropout)
-            x = attention_block(SelfAttention_share_2[j], x, cont_len, dropout)
-            x = feed_forward_block(FeedForward_share_2[j], x, dropout)
+            x = PositionEmbedding()(x)
+            x = conv_block(DepthwiseConv_share_2[j], x, 2, dropout, l=j, L=7)
+            x = attention_block(SelfAttention_share_2[j], x, cont_len, dropout, l=j, L=7)
+            x = feed_forward_block(FeedForward_share_2[j], x, dropout, l=j, L=7)
         outputs.append(x)
 
     # Output_Layer
     x_start = Concatenate()([outputs[1], outputs[2]])
-    x_start = Conv1D(1, 1, activation='linear')(x_start)
-    x_start = Lambda(lambda x:tf.squeeze(x,axis=-1))(x_start)
-    x_start = Lambda(lambda x:mask_logits(x[0], x[1], axis=0, time_dim=1))([x_start,cont_len])
-    x_start = Lambda(lambda x:K.softmax(x),name='start')(x_start)
+    x_start = Conv1D(1, 1, kernel_regularizer=regularizer, activation='linear')(x_start)
+    x_start = Lambda(lambda x: tf.squeeze(x, axis=-1))(x_start)
+    x_start = Lambda(lambda x: mask_logits(x[0], x[1], axis=0, time_dim=1))([x_start, cont_len])
+    x_start = Lambda(lambda x: K.softmax(x), name='start')(x_start)
 
     x_end = Concatenate()([outputs[1], outputs[3]])
-    x_end = Conv1D(1, 1, activation='linear')(x_end)
+    x_end = Conv1D(1, 1, kernel_regularizer=regularizer, activation='linear')(x_end)
     x_end = Lambda(lambda x: tf.squeeze(x, axis=-1))(x_end)
     x_end = Lambda(lambda x: mask_logits(x[0], x[1], axis=0, time_dim=1))([x_end, cont_len])
-    x_end = Lambda(lambda x: K.softmax(x),name='end')(x_end)
+    x_end = Lambda(lambda x: K.softmax(x), name='end')(x_end)
 
-    if hand_feat_dim==0:
+    if hand_feat_dim == 0:
         return Model(inputs=[contw_input, quesw_input, contc_input, quesc_input, cont_len, ques_len],
-                     outputs=[x_start,x_end])
+                     outputs=[x_start, x_end])
     else:
         return Model(inputs=[contw_input, quesw_input, contc_input, quesc_input, cont_len, ques_len, handcraft_input],
                      outputs=[x_start, x_end])
