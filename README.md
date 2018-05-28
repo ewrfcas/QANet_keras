@@ -20,7 +20,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Revised the MultiHeadAttention and PositionEmbedding in keras
 - [x] Support parallel multi-gpu training and inference
 - [x] Add layer dropout
-- [x] Update the experimental results and related hyper-parameters
+- [ ] Update the experimental results and related hyper-parameters (Coming soon)
 - [ ] Add data augmentation
 
 ## Results
