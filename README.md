@@ -25,7 +25,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [ ] Add slice operation to QANet(get the max context length from each batch dynamically to speed up the model)
 - [ ] Add data augmentation
 
-I find that EMA in keras is hard to implement in GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(about 2 times compared with the optimized tensorflow version...). Moreover, there is also 2% gap of keras compared with the tensorflow version(https://github.com/NLPLearn/QANet).
+I find that EMA in keras is hard to implement with GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(cost about twice as much time compared with the optimized tensorflow version...). Moreover, there is also 2% gap of keras compared with the tensorflow version(https://github.com/NLPLearn/QANet).
 
 ## Results
 Result on dev set of squad
