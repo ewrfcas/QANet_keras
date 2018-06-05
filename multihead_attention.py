@@ -36,7 +36,7 @@ class Attention(Layer):
         mask = tf.reshape(mask, [shapes[0], 1, 1, shapes[-1]])
         return inputs + mask_value * (1 - mask)
 
-    def dot_product_attention(self, x, seq_len=None, dropout=0.1):
+    def dot_product_attention(self, x, seq_len=None, dropout=0.1, training=None):
         q, k, v = x
         logits = tf.matmul(q, k, transpose_b=True)
         if self.bias:
@@ -44,7 +44,7 @@ class Attention(Layer):
         if seq_len is not None:
             logits = self.mask_logits(logits, seq_len)
         weights = tf.nn.softmax(logits, name="attention_weights")
-        weights = tf.nn.dropout(weights, 1.0 - dropout)
+        weights = K.in_train_phase(K.dropout(weights, dropout), weights, training=training)
         x = tf.matmul(weights, v)
         return x
 
@@ -56,7 +56,7 @@ class Attention(Layer):
         ret.set_shape(new_shape)
         return ret
 
-    def call(self, x, mask=None):
+    def call(self, x, mask=None, training=None):
         memory, query, seq_len = x
         Q = self.split_last_dimension(query, self.num_heads)
         memory = tf.split(memory, 2, axis=2)
@@ -65,7 +65,7 @@ class Attention(Layer):
 
         key_depth_per_head = self.units // self.num_heads
         Q *= (key_depth_per_head ** -0.5)
-        x = self.dot_product_attention([Q, K, V], seq_len, dropout=self.dropout)
+        x = self.dot_product_attention([Q, K, V], seq_len, dropout=self.dropout, training=training)
         x = self.combine_last_two_dimensions(tf.transpose(x, [0,2,1,3]))
 
         return x
