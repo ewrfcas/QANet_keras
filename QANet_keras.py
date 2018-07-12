@@ -4,7 +4,7 @@ from keras.models import *
 from context2query_attention import context2query_attention
 from multihead_attention import Attention as MultiHeadAttention
 from position_embedding import Position_Embedding as PositionEmbedding
-from keras import layers
+from layer_norm import LayerNormalization
 from layer_dropout import LayerDropout
 from QAoutputBlock import QAoutputBlock
 from keras. initializers import *
@@ -37,7 +37,7 @@ def conv_block(conv_layers, x, num_conv=4, dropout=0.0, l=1., L=1.):
     x = Lambda(lambda v: K.expand_dims(v, axis=2))(x)
     for i in range(num_conv):
         residual = x
-        x = BatchNormalization()(x)
+        x = LayerNormalization()(x)
         x = Dropout(dropout)(x)
         x = conv_layers[i][0](x)
         x = conv_layers[i][1](x)
@@ -47,7 +47,7 @@ def conv_block(conv_layers, x, num_conv=4, dropout=0.0, l=1., L=1.):
 
 def attention_block(attention_layer, x, seq_len, dropout=0.0, l=1., L=1.):
     residual = x
-    x = BatchNormalization()(x)
+    x = LayerNormalization()(x)
     x = Dropout(dropout)(x)
     x1 = attention_layer[0](x)
     x2 = attention_layer[1](x)
@@ -57,7 +57,7 @@ def attention_block(attention_layer, x, seq_len, dropout=0.0, l=1., L=1.):
 
 def feed_forward_block(FeedForward_layers, x, dropout=0.0, l=1., L=1.):
     residual = x
-    x = BatchNormalization()(x)
+    x = LayerNormalization()(x)
     x = Dropout(dropout)(x)
     x = FeedForward_layers[0](x)
     x = FeedForward_layers[1](x)

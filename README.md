@@ -20,9 +20,10 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Revised the MultiHeadAttention and PositionEmbedding in keras
 - [x] Support parallel multi-gpu training and inference
 - [x] Add layer dropout and revise the dropout bug (with about 2% improvement)
-- [x] Update the experimental results and related hyper-parameters (Coming soon)
+- [x] Update the experimental results and related hyper-parameters (in `train_QANet.py`)
 - [x] Revise the output Layer `QAoutputBlock.py`(with about 1% improvement)
-- [ ] Add slice operation to QANet(get the max context length from each batch dynamically to speed up the model)
+- [x] Replace the **BatchNormalization** with the **LayerNormalization** in `layer_norm.py`(the improvement of this change is unknow, look for results...)
+- [ ] Add slice operation to QANet (get the max context length from each batch dynamically to speed up the model)
 - [ ] Add data augmentation
 
 I find that EMA in keras is hard to implement with GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(cost about twice as much time compared with the optimized tensorflow version...). Moreover, there is also 2% gap of keras compared with the tensorflow version(https://github.com/NLPLearn/QANet).
