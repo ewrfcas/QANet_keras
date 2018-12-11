@@ -4,6 +4,7 @@ from keras import backend as K
 from keras.engine.topology import Layer
 import tensorflow as tf
 
+
 class Attention(Layer):
     def __init__(self, units, num_heads, dropout=0.0, bias=True, **kwargs):
         self.units = units
@@ -33,12 +34,12 @@ class Attention(Layer):
 
     def dot_product_attention(self, x, mask=None, dropout=0.1, training=None):
         q, k, v = x
-        logits = tf.matmul(q, k, transpose_b=True) # [bs, 8, len, len]
+        logits = tf.matmul(q, k, transpose_b=True)  # [bs, 8, len, len]
         if self.bias:
             logits += self.b
-        if mask is not None: # [bs, len]
+        if mask is not None:  # [bs, len]
             mask = tf.expand_dims(mask, axis=1)
-            mask = tf.expand_dims(mask, axis=1) # [bs,1,1,len]
+            mask = tf.expand_dims(mask, axis=1)  # [bs,1,1,len]
             logits = self.mask_logits(logits, mask)
         weights = tf.nn.softmax(logits, name="attention_weights")
         weights = K.in_train_phase(K.dropout(weights, dropout), weights, training=training)
@@ -63,7 +64,7 @@ class Attention(Layer):
         key_depth_per_head = self.units // self.num_heads
         Q *= (key_depth_per_head ** -0.5)
         x = self.dot_product_attention([Q, K, V], seq_mask, dropout=self.dropout, training=training)
-        x = self.combine_last_two_dimensions(tf.transpose(x, [0,2,1,3]))
+        x = self.combine_last_two_dimensions(tf.transpose(x, [0, 2, 1, 3]))
 
         return x
 

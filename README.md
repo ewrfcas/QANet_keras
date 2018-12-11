@@ -21,7 +21,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Update the experimental results and related hyper-parameters (in `train_QANet.py`)
 - [x] Revise the output Layer `QAoutputBlock.py`(with about 1% improvement)
 - [x] Replace the **BatchNormalization** with the **LayerNormalization** in `layer_norm.py`(the improvement of this change is unknow, look for results...)
-- [x] Add slice operation to QANet (double speed up, but now use train_on_batch instead of fit_generator)
+- [x] Add **slice operation** to QANet (double speed up, but now use train_on_batch instead of fit_generator)
 - [x] Add Cove (looking for results)
 - [ ] Add Elmo in keras
 - [ ] Add data augmentation

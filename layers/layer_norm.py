@@ -19,8 +19,8 @@ class LayerNormalization(Layer):
         super(LayerNormalization, self).build(input_shape)
 
     def call(self, x, mask=None, training=None):
-        mean = tf.reduce_mean(x, axis=-1, keep_dims=True)
-        variance = tf.reduce_mean(tf.square(x - mean), axis=-1, keep_dims=True)
+        mean = tf.reduce_mean(x, axis=-1, keepdims=True)
+        variance = tf.reduce_mean(tf.square(x - mean), axis=-1, keepdims=True)
         norm_x = (x - mean) * tf.rsqrt(variance + K.epsilon())
         return norm_x * self.scale + self.bias
 

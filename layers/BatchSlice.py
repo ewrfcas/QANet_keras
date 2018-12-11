@@ -11,7 +11,7 @@ class BatchSlice(Layer):
         super(BatchSlice, self).build(input_shape)
 
     def call(self, x, mask=None):
-        x, length = x
+        x, length = x # [bs, len, dim]
         length = tf.cast(tf.reduce_max(length), tf.int32)
         st = [0] * self.dim
         ed = [-1] * self.dim
