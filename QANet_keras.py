@@ -69,15 +69,14 @@ def feed_forward_block(FeedForward_layers, x, dropout=0.0, l=1., L=1.):
 
 def QANet(config, word_mat=None, char_mat=None, cove_model=None):
     # parameters
-    word_dim = config['word_dim']
-    char_dim = config['char_dim']
-    cont_limit = config['cont_limit']
-    char_limit = config['char_limit']
-    ans_limit = config['ans_limit']
-    char_input_size = config['char_input_size']
-    filters = config['filters']
-    num_head = config['num_head']
-    dropout = config['dropout']
+    word_dim = config.word_dim
+    char_dim = config.char_dim
+    cont_limit = config.cont_limit
+    char_limit = config.char_limit
+    ans_limit = config.ans_limit
+    filters = config.filters
+    num_head = config.num_head
+    dropout = config.dropout
 
     # Input Embedding Layer
     contw_input_ = Input((None,))
@@ -102,7 +101,7 @@ def QANet(config, word_mat=None, char_mat=None, cove_model=None):
     q_maxlen = tf.cast(tf.reduce_max(ques_len), tf.int32)
 
     # embedding word
-    WordEmbedding = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], trainable=False)
+    WordEmbedding = Embedding(word_mat.shape[0], word_dim, weights=[word_mat], trainable=False, name='word_embedding')
     xw_cont = WordEmbedding(contw_input)
     xw_ques = WordEmbedding(quesw_input)
 
@@ -114,7 +113,7 @@ def QANet(config, word_mat=None, char_mat=None, cove_model=None):
         xw_ques = Concatenate()([xw_ques, x_ques_cove])
 
     # embedding char
-    CharEmbedding = Embedding(char_input_size, char_dim, weights=[char_mat], name='char_embedding')
+    CharEmbedding = Embedding(char_mat.shape[0], char_dim, weights=[char_mat], name='char_embedding')
     xc_cont = CharEmbedding(contc_input)
     xc_ques = CharEmbedding(quesc_input)
     char_conv = Conv1D(filters, 5,
@@ -243,7 +242,7 @@ def QANet(config, word_mat=None, char_mat=None, cove_model=None):
                      activation='linear')(x_start)
     x_start = Lambda(lambda x: tf.squeeze(x, axis=-1))(x_start)
     x_start = Lambda(lambda x: mask_logits(x[0], x[1]))([x_start, c_mask])
-    x_start = Lambda(lambda x: K.softmax(x), name='start')(x_start) # [bs, len]
+    x_start = Lambda(lambda x: K.softmax(x), name='start')(x_start)  # [bs, len]
 
     x_end = Concatenate()([outputs[1], outputs[3]])
     x_end = Conv1D(1, 1,
@@ -252,13 +251,13 @@ def QANet(config, word_mat=None, char_mat=None, cove_model=None):
                    activation='linear')(x_end)
     x_end = Lambda(lambda x: tf.squeeze(x, axis=-1))(x_end)
     x_end = Lambda(lambda x: mask_logits(x[0], x[1]))([x_end, c_mask])
-    x_end = Lambda(lambda x: K.softmax(x), name='end')(x_end) # [bs, len]
+    x_end = Lambda(lambda x: K.softmax(x), name='end')(x_end)  # [bs, len]
 
-    x_start_fin, x_end_fin = QAoutputBlock(ans_limit)([x_start, x_end])
+    x_start_fin, x_end_fin = QAoutputBlock(ans_limit, name='qa_output')([x_start, x_end])
 
-    # if use model.fit, the output shape must be padded to the same length
-    x_start = LabelPadding(cont_limit)(x_start)
-    x_end = LabelPadding(cont_limit)(x_end)
+    # if use model.fit, the output shape must be padded to the max length
+    x_start = LabelPadding(cont_limit, name='start_pos')(x_start)
+    x_end = LabelPadding(cont_limit, name='end_pos')(x_end)
 
     return Model(inputs=[contw_input_, quesw_input_, contc_input_, quesc_input_],
                  outputs=[x_start, x_end, x_start_fin, x_end_fin])

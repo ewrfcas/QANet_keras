@@ -1,27 +1,43 @@
-# changed from https://github.com/alno/kaggle-allstate-claims-severity/blob/master/keras_util.py by ewrfcas
-
-from keras import backend as K
-from tqdm import tqdm
+import tensorflow as tf
+import keras.backend as K
 
 
-def ExponentialMovingAverage_TrainBegin(model):
-    # run when training begins
-    # ema_trainable_weights_vals save the latest weights of model with ema
-    ema_trainable_weights_vals = {}
-    for weight in tqdm(model.trainable_weights):
-        ema_trainable_weights_vals[weight.name] = K.get_value(weight)
-    return ema_trainable_weights_vals
+class ExponentialMovingAverage():
+    def __init__(self, model, decay, weights_list=None, temp_model='temp_model.h5',
+                 name='ExponentialMovingAverage'):
+        # EMA for keras, the example can be seen in https://github.com/ewrfcas/QANet_keras/blob/master/train_QANet.py
+        # init before training, but after the model init.
+        self.model = model
+        self.scope_name = name
+        self.temp_model = temp_model
+        self.sess = K.get_session()
+        with tf.variable_scope(self.scope_name):
+            # shadow weights dict {key:model_weights, value:shadow_weights}
+            self.shadow_weights = {}
+            if weights_list is None:
+                weights_list = self.model.trainable_weights
+            for weight in weights_list:
+                self.shadow_weights[weight] = tf.Variable(weight)
 
+            # average
+            self.average_list = []
+            for weight in self.shadow_weights:
+                self.average_list.append(tf.assign(self.shadow_weights[weight],
+                                                   decay * self.shadow_weights[weight] + (1.0 - decay) * weight))
 
-def ExponentialMovingAverage_BatchEnd(model, ema_trainable_weights_vals, decay=0.999):
-    # run when each batch ends
-    for weight in model.trainable_weights:
-        old_val = ema_trainable_weights_vals[weight.name]
-        ema_trainable_weights_vals[weight.name] = decay * old_val + (1.0 - decay) * K.get_value(weight)
-    return ema_trainable_weights_vals
+            # assign
+            self.assign_list = []
+            for weight in self.shadow_weights:
+                self.assign_list.append(tf.assign(weight, self.shadow_weights[weight]))
 
+        self.sess.run(tf.global_variables_initializer())
 
-def ExponentialMovingAverage_EpochEnd(model, ema_trainable_weights_vals):
-    # run when each epoch ends, generate model with ema to evaluating
-    for weight in tqdm(model.trainable_weights):
-        K.set_value(weight, ema_trainable_weights_vals[weight.name])
+    def average_update(self):
+        # run in the end of each batch
+        self.sess.run(self.average_list)
+
+    def assign_shadow_weights(self, backup=True):
+        # run while you need to assign shadow weights (at end of each epoch or the total training)
+        if backup:
+            self.model.save_weights(self.temp_model)
+        self.sess.run(self.assign_list)

@@ -23,10 +23,12 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Replace the **BatchNormalization** with the **LayerNormalization** in `layer_norm.py`(the improvement of this change is unknow, look for results...)
 - [x] Add **slice operation** to QANet (double speed up, but now use train_on_batch instead of fit_generator)
 - [x] Add Cove (looking for results)
+- [x] Implement the EMA in keras-gpu.
 - [ ] Add Elmo in keras
 - [ ] Add data augmentation
 
-I find that EMA in keras is hard to implement with GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(cost about twice as much time compared with the optimized tensorflow version...). Moreover, there is also 2% gap of keras compared with the tensorflow version(https://github.com/NLPLearn/QANet).
+~~I find that EMA in keras is hard to implement with GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(cost about twice as much time compared with the optimized tensorflow version...).~~
+Now, the gpu-version EMA can work perporly in keras.
 
 ## Results
 Result on dev set of squad (no cove and elmo)
