@@ -12,7 +12,7 @@ import argparse
 from layers.ExponentialMovingAverage import ExponentialMovingAverage
 import keras.backend as K
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '7'
+os.environ["CUDA_VISIBLE_DEVICES"] = '5'
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--train_path", default='dataset/train_total_data.pkl', type=str, help="train path")
@@ -34,11 +34,14 @@ parser.add_argument("--epoch", default=25, type=int, help="epochs")
 parser.add_argument("--ema_decay", default=0.9999, type=float, help="ema decay")
 parser.add_argument("--learning_rate", default=1e-3, type=float, help="learning rate")
 parser.add_argument("--warm_up_steps", default=1000, type=int, help="warm up steps")
-parser.add_argument("--path", default='QANet_EMA_COVE0', type=str, help="saving name of the model")
+parser.add_argument("--name", default='QANet_EMA_CPU1', type=str, help="saving name of the model")
 parser.add_argument("--use_cove", default=False, type=bool, help="whether to use cove")
 parser.add_argument("--cove_path", default='model/Keras_CoVe_nomask.h5', type=str, help="Cove path")
 
 config = parser.parse_args()
+config.path = 'model/' + config.name
+
+os.makedirs(config.path, exist_ok=True)
 
 # load trainset
 with open(config.train_path, 'rb') as f:
@@ -73,11 +76,13 @@ optimizer = Adam(lr=config.learning_rate, beta_1=0.8, beta_2=0.999, epsilon=1e-7
 model.compile(optimizer=optimizer, loss=['categorical_crossentropy', 'categorical_crossentropy', 'mae', 'mae'],
               loss_weights=[0.5, 0.5, 0, 0])
 
+
 class QANet_callback(Callback):
     def __init__(self):
         self.global_step = 1
         self.max_f1 = 0
-        self.keras_ema = ExponentialMovingAverage(model, decay=config.ema_decay)
+        self.keras_ema = ExponentialMovingAverage(model, decay=config.ema_decay,
+                                                  temp_model=os.path.join(config.path, 'temp_model.h5'), type='cpu')
         super(Callback, self).__init__()
 
     def on_train_begin(self, logs=None):
@@ -106,10 +111,10 @@ class QANet_callback(Callback):
         f1s.append(metrics['f1'])
         print("-EM:%.2f%%, -F1:%.2f%%" % (metrics['exact_match'], metrics['f1']))
         result = pd.DataFrame([ems, f1s], index=['em', 'f1']).transpose()
-        result.to_csv('logs/result_' + config.path + '.csv', index=None)
+        result.to_csv('logs/result_' + config.name + '.csv', index=None)
         if f1s[-1] > self.max_f1:
             self.max_f1 = f1s[-1]
-            model.save_weights('model/QANet_model_' + config.path + '.h5')
+            model.save_weights(os.path.join(config.path, 'QANet_model_' + config.name + '.h5'))
         model.load_weights(self.keras_ema.temp_model)
 
 
