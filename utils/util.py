@@ -1,8 +1,6 @@
 import re
 from collections import Counter
 import string
-import time
-import numpy as np
 
 '''
 This file is taken and modified from R-Net by HKUST-KnowComp

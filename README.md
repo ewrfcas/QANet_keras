@@ -8,7 +8,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 ## Pipline
 1. Download squad data from (https://rajpurkar.github.io/SQuAD-explorer/).
 
-2. Run `preprocess.ipynb` and `handcraft.ipynb`(if you need) to get npys of the preprocessed data and handcraft features.
+2. Run `preprocess.py` to get the wordpiece based preprocessed data.
 
 3. Run `train_QANet.py` to start training.
 
@@ -25,7 +25,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Add **slice operation** to QANet (double speed up)
 - [x] Add Cove (looking for results)
 - [x] Implement the EMA in keras-gpu. (30% spped up)
-- [ ] Add WordPiece in keras
+- [x] Add WordPiece in keras (from BERT) (0.5% improvement)
 - [ ] Add data augmentation
 
 ~~I find that EMA in keras is hard to implement with GPU, and the training speed is greatly affected by it in keras. Besides, it's hard to add the slice op in keras too, so the training speed is further slower(cost about twice as much time compared with the optimized tensorflow version...).~~
@@ -39,3 +39,4 @@ All models are set in 8 heads, 128 filters.
 | ------ | ------ | ------ |
 | batch_size=24 | 11 | 66.24% / 76.75% |
 | batch_size=24 + ema_decay=0.9999 | 14 | 69.51% / 79.13% |
+| batch_size=24 + ema_decay=0.9999 + wordpiece | 17 | 70.07% / 79.52% |
