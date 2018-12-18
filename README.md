@@ -23,7 +23,7 @@ This keras model refers to QANet in tensorflow (https://github.com/NLPLearn/QANe
 - [x] Revise the output Layer `QAoutputBlock.py`(with about 1% improvement)
 - [x] Replace the **BatchNormalization** with the **LayerNormalization** in `layer_norm.py`(about 0.5% improvement)
 - [x] Add **slice operation** to QANet (double speed up)
-- [x] Add Cove (looking for results)
+- [x] Add Cove (about 1.4% improvement)
 - [x] Implement the EMA in keras-gpu. (30% spped up)
 - [x] Add WordPiece in keras (from BERT) (0.5% improvement)
 - [ ] Add data augmentation
@@ -40,3 +40,4 @@ All models are set in 8 heads, 128 filters.
 | batch_size=24 | 11 | 66.24% / 76.75% |
 | batch_size=24 + ema_decay=0.9999 | 14 | 69.51% / 79.13% |
 | batch_size=24 + ema_decay=0.9999 + wordpiece | 17 | 70.07% / 79.52% |
+| batch_size=24 + ema_decay=0.9999 + wordpiece + Cove | 13 | 71.48% / 80.85% |
