@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import json
+from pathlib import Path
 from tqdm import tqdm
 from collections import Counter
 from utils import tokenization
@@ -213,13 +214,12 @@ def read_squad_examples(input_file, is_training):
     return examples
 
 
-def convert_examples_to_features(examples, tokenizer, max_seq_length=384, doc_stride=128, max_query_length=64,
-                                 is_training=True):
+def convert_examples_to_features(examples, tokenizer, max_seq_length=384, doc_stride=128, max_query_length=64, is_training=True):
     """Loads a data file into a list of `InputBatch`s."""
 
     qid = 0
     features = []
-    for (example_index, example) in enumerate(tqdm(examples)):
+    for example_index, example in enumerate(tqdm(examples)):
         uuid = example.uuid
         query_tokens = tokenizer.tokenize(example.question_text)
 
@@ -229,12 +229,16 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length=384, doc_st
         tok_to_orig_index = []
         orig_to_tok_index = []
         all_doc_tokens = []
-        for (i, token) in enumerate(example.doc_tokens):
-            orig_to_tok_index.append(len(all_doc_tokens))
-            sub_tokens = tokenizer.tokenize(token)
-            for sub_token in sub_tokens:
-                tok_to_orig_index.append(i)
-                all_doc_tokens.append(sub_token)
+        for i, token in enumerate(example.doc_tokens):
+            try:
+                orig_to_tok_index.append(len(all_doc_tokens))
+                sub_tokens = tokenizer.tokenize(token)
+                for sub_token in sub_tokens:
+                    tok_to_orig_index.append(i)
+                    all_doc_tokens.append(sub_token)
+            except Exception as e:
+                print(e)
+                pass
 
         tok_start_position = None
         tok_end_position = None
@@ -339,19 +343,16 @@ def token_process(features, tokenizer, vocab_file):
     return word_embedding, char_embedding, tokenizer
 
 
-def build_features(features, tokenizer, save_path, max_seq_length=384, max_query_length=64, char_limit=16,
-                   is_training=True):
+def build_features(features, tokenizer, save_path, max_seq_length=384, max_query_length=64, char_limit=16, is_training=True):
     def convert_token_to_id(vocab, token):
         for each in (token, token.lower(), token.capitalize(), token.upper()):
             if each in vocab:
                 return vocab[each]
         return vocab['--OOV--']
-
     def convert_char_to_id(vocab, char):
         if char in vocab:
             return vocab[char]
         return vocab['--OOV--']
-
     context_idxss = []
     ques_idxss = []
     context_char_idxss = []
@@ -359,41 +360,39 @@ def build_features(features, tokenizer, save_path, max_seq_length=384, max_query
     y1s = []
     y2s = []
     qids = []
-
     for feature in tqdm(features):
-        qids.append(feature.qid)
-        context_idxs = np.zeros([max_seq_length], dtype=np.int32)
-        context_char_idxs = np.zeros([max_seq_length, char_limit], dtype=np.int32)
-        ques_idxs = np.zeros([max_query_length], dtype=np.int32)
-        ques_char_idxs = np.zeros([max_query_length, char_limit], dtype=np.int32)
-        y1 = np.zeros([max_seq_length], dtype=np.float32)
-        y2 = np.zeros([max_seq_length], dtype=np.float32)
-
-        for i, token in enumerate(feature.doc_tokens):
-            context_idxs[i] = convert_token_to_id(tokenizer.vocab, token)
-            for j, char in enumerate(token):
-                if j == char_limit:
-                    break
-                context_char_idxs[i, j] = convert_char_to_id(tokenizer.char_vocab, char)
-
-        for i, token in enumerate(feature.ques_tokens):
-            ques_idxs[i] = convert_token_to_id(tokenizer.vocab, token)
-            for j, char in enumerate(token):
-                if j == char_limit:
-                    break
-                ques_char_idxs[i, j] = convert_char_to_id(tokenizer.char_vocab, char)
-
-        if is_training:
-            y1[feature.start_position], y2[feature.end_position] = 1.0, 1.0
-
-        context_idxss.append(np.expand_dims(context_idxs, axis=0))
-        ques_idxss.append(np.expand_dims(ques_idxs, axis=0))
-        context_char_idxss.append(np.expand_dims(context_char_idxs, axis=0))
-        ques_char_idxss.append(np.expand_dims(ques_char_idxs, axis=0))
-        if is_training:
-            y1s.append(np.expand_dims(y1, axis=0))
-            y2s.append(np.expand_dims(y2, axis=0))
-
+        try:
+            qids.append(feature.qid)
+            context_idxs = np.zeros([max_seq_length], dtype=np.int32)
+            context_char_idxs = np.zeros([max_seq_length, char_limit], dtype=np.int32)
+            ques_idxs = np.zeros([max_query_length], dtype=np.int32)
+            ques_char_idxs = np.zeros([max_query_length, char_limit], dtype=np.int32)
+            y1 = np.zeros([max_seq_length], dtype=np.float32)
+            y2 = np.zeros([max_seq_length], dtype=np.float32)
+            for i, token in enumerate(feature.doc_tokens):
+                context_idxs[i] = convert_token_to_id(tokenizer.vocab, token)
+                for j, char in enumerate(token):
+                    if j == char_limit:
+                        break
+                    context_char_idxs[i, j] = convert_char_to_id(tokenizer.char_vocab, char)
+            for i, token in enumerate(feature.ques_tokens):
+                ques_idxs[i] = convert_token_to_id(tokenizer.vocab, token)
+                for j, char in enumerate(token):
+                    if j == char_limit:
+                        break
+                    ques_char_idxs[i, j] = convert_char_to_id(tokenizer.char_vocab, char)
+            if is_training:
+                y1[feature.start_position], y2[feature.end_position] = 1.0, 1.0
+            context_idxss.append(np.expand_dims(context_idxs, axis=0))
+            ques_idxss.append(np.expand_dims(ques_idxs, axis=0))
+            context_char_idxss.append(np.expand_dims(context_char_idxs, axis=0))
+            ques_char_idxss.append(np.expand_dims(ques_char_idxs, axis=0))
+            if is_training:
+                y1s.append(np.expand_dims(y1, axis=0))
+                y2s.append(np.expand_dims(y2, axis=0))
+        except Exception as e:
+            print(e)
+            pass
     context_idxss = np.concatenate(context_idxss, axis=0)
     ques_idxss = np.concatenate(ques_idxss, axis=0)
     context_char_idxss = np.concatenate(context_char_idxss, axis=0)
@@ -402,7 +401,6 @@ def build_features(features, tokenizer, save_path, max_seq_length=384, max_query
         y1s = np.concatenate(y1s, axis=0)
         y2s = np.concatenate(y2s, axis=0)
     qids = np.array(qids)
-
     meta = {'qid': qids,
             'context_id': context_idxss,
             'question_id': ques_idxss,
@@ -410,32 +408,48 @@ def build_features(features, tokenizer, save_path, max_seq_length=384, max_query
             'question_char_id': ques_char_idxss,
             'y_start': y1s,
             'y_end': y2s}
-
     print('save to', save_path, len(qids), 'features')
     with open(save_path, 'wb') as f:
         pickle.dump(meta, f)
 
 
 if __name__ == '__main__':
+
+    # Load tokenizer
     tokenizer = tokenization.FullTokenizer(vocab_file='original_data/glove.840B.300d.txt', do_lower_case=False)
     train_examples = read_squad_examples(input_file='original_data/train-v1.1.json', is_training=True)
     dev_examples = read_squad_examples(input_file='original_data/dev-v1.1.json', is_training=False)
-    train_features = convert_examples_to_features(train_examples, tokenizer, max_seq_length=400, max_query_length=50,
-                                                  is_training=True)
-    dev_features = convert_examples_to_features(dev_examples, tokenizer, max_seq_length=400, max_query_length=50,
-                                                is_training=False)
+
+    
+
+    train_features = convert_examples_to_features(train_examples, tokenizer, max_seq_length=400, max_query_length=50,is_training=True)
+    dev_features = convert_examples_to_features(dev_examples, tokenizer, max_seq_length=400, max_query_length=50, is_training=False)
+
+
+
     total_features = []
     total_features.extend(train_features)
     total_features.extend(dev_features)
-    word_embedding, char_embedding, tokenizer = token_process(total_features, tokenizer,
-                                                              'original_data/glove.840B.300d.txt')
+    word_embedding, char_embedding, tokenizer = token_process(total_features, tokenizer, 'original_data/glove.840B.300d.txt')
 
+    
     print(word_embedding.shape)
     print(len(tokenizer.vocab))
     print(char_embedding.shape)
     print(len(tokenizer.char_vocab))
-    np.save('dataset_wordpiece/word_emb_mat.npy', word_embedding)
-    np.save('dataset_wordpiece/char_emb_mat.npy', char_embedding)
 
-    build_features(train_features, tokenizer, 'dataset_wordpiece/trainset_wordpiece.pkl', is_training=True)
-    build_features(dev_features, tokenizer, 'dataset_wordpiece/devset_wordpiece.pkl', is_training=False)
+    preprocessDatasetPath = Path('./dataset_wordpiece/')
+    if not preprocessDatasetPath.is_dir():
+        preprocessDatasetPath.mkdir()
+
+    np.save('./dataset_wordpiece/word_emb_mat.npy', word_embedding)
+    np.save('./dataset_wordpiece/char_emb_mat.npy', char_embedding)
+    
+    with open('./dataset_wordpiece/dev_examples.pkl', 'wb') as p:
+        pickle.dump(dev_examples, p)
+    with open('./dataset_wordpiece/dev_features.pkl', 'wb') as p:
+        pickle.dump(dev_features, p)
+
+
+    build_features(train_features, tokenizer, './dataset_wordpiece/trainset_wordpiece.pkl', is_training=True)
+    build_features(dev_features, tokenizer, './dataset_wordpiece/devset_wordpiece.pkl', is_training=False)

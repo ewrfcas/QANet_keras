@@ -1,0 +1,11 @@
+
+.DS_Store
+desktop.ini
+
+*.npy
+*.pkl
+
+__pycache__
+
+*.txt
+*.json
