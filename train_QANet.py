@@ -12,17 +12,15 @@ import keras.backend as K
 import collections
 from utils.output import write_predictions
 from utils.evaluation import evaluate
+from preprocess import SquadExample, InputFeatures
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+#os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--train_path", default='../QANet_wordpiece/dataset/trainset_wordpiece.pkl', type=str,
-                    help="train path")
-parser.add_argument("--dev_path", default='../QANet_wordpiece/dataset/devset_wordpiece.pkl', type=str, help="dev path")
-parser.add_argument("--word_embedding", default='../QANet_wordpiece/dataset/word_emb_mat.npy', type=str,
-                    help="word embedding path")
-parser.add_argument("--char_embedding", default='../QANet_wordpiece/dataset/char_emb_mat.npy', type=str,
-                    help="char embedding path")
+parser.add_argument("--train_path", default='./dataset_wordpiece/trainset_wordpiece.pkl', type=str, help="train path")
+parser.add_argument("--dev_path", default='./dataset_wordpiece/devset_wordpiece.pkl', type=str, help="dev path")
+parser.add_argument("--word_embedding", default='./dataset_wordpiece/word_emb_mat.npy', type=str, help="word embedding path")
+parser.add_argument("--char_embedding", default='./dataset_wordpiece/char_emb_mat.npy', type=str, help="char embedding path")
 parser.add_argument("--word_dim", default=300, type=int, help="dim of glove word vector")
 parser.add_argument("--char_dim", default=64, type=int, help="dim of character")
 parser.add_argument("--cont_limit", default=384, type=int, help="context word limit")
@@ -56,9 +54,9 @@ train_data['end_label_fin'] = np.argmax(train_data['y_end'], axis=-1)
 with open(config.dev_path, 'rb') as f:
     dev_data = pickle.load(f)
 
-with open('../QANet_wordpiece/dataset/dev_examples.pkl', 'rb') as f:
+with open('./dataset_wordpiece/dev_examples.pkl', 'rb') as f:
     eval_examples = pickle.load(f)
-with open('../QANet_wordpiece/dataset/dev_features.pkl', 'rb') as f:
+with open('./dataset_wordpiece/dev_features.pkl', 'rb') as f:
     eval_features = pickle.load(f)
 
 # load embedding matrix
@@ -137,6 +135,8 @@ class QANet_callback(Callback):
 qanet_callback = QANet_callback()
 qanet_callback.set_model(model)
 
+
+
 model.fit(x=[train_data['context_id'], train_data['question_id'],
              train_data['context_char_id'], train_data['question_char_id']],
           y=[train_data['y_start'], train_data['y_end'], train_data['start_label_fin'],
@@ -144,3 +144,6 @@ model.fit(x=[train_data['context_id'], train_data['question_id'],
           batch_size=config.batch_size,
           epochs=config.epoch,
           callbacks=[qanet_callback])
+
+
+
